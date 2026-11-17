@@ -78,8 +78,11 @@
         }
 
         window.saveDataToCloud = async function(dataToSave) {
-            if (!db || !auth || !auth.currentUser) return false;
+            if (!db || !auth) return false;
             try {
+                if (!auth.currentUser) {
+                    await signInAnonymously(auth);
+                }
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'board_settings', 'main');
                 await setDoc(docRef, { 
                     appData: dataToSave,
@@ -96,10 +99,12 @@
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     initCloudSync();
+                } else {
+                    signInAnonymously(auth).catch(console.error);
                 }
             });
             if (!auth.currentUser) {
-                initCloudSync();
+                signInAnonymously(auth).then(() => initCloudSync()).catch(console.error);
             }
         }
     </script>
