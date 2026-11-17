@@ -14,18 +14,17 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : {
-                apiKey: "AIzaSyDummyKeyForFallbackOnly12345",
-                authDomain: "synagogue-board-app.firebaseapp.com",
-                projectId: "synagogue-board-app",
-                storageBucket: "synagogue-board-app.appspot.com",
-                messagingSenderId: "1234567890",
-                appId: "1:1234567890:web:abcdef123456"
-            };
+        const firebaseConfig = {
+            apiKey: "AIzaSyBc_7ZQLfhgv9wVNLXixc2w6cDfj8M2ka",
+            authDomain: "project-3378571760071000460.firebaseapp.com",
+            projectId: "project-3378571760071000460",
+            storageBucket: "project-3378571760071000460.firebasestorage.app",
+            messagingSenderId: "962936398221",
+            appId: "1:962936398221:web:ae0878a5f22f94e3f898c4",
+            measurementId: "G-35Q8GZ9B6X"
+        };
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'synagogue-main-board';
+        const appId = 'synagogue-main-board';
         
         let app, db, auth;
         try {
@@ -527,7 +526,7 @@
             "אמור": "יחזקאל פרק מ\"ד פסוק ט\"ו עד פסוק ל\"א",
             "בהר": "ירמיהו פרק ל\"ב פסוק ו' עד פסוק כ\"ז",
             "בחוקותי": "ירמיהו פרק ט\"ז פסוק י\"ט עד פרק י\"ז פסוק י\"ד",
-            "בהר-בחוקותי": "ירמיהו פרק ט\"ז פסוק י\"ט עד פרק י\"ז פסוק י\"ד",
+            "בהר-בחוקותי": "ירמיהו פרק ט\"ז פסוק י\"ט עד פסוק י\"ז פסוק י\"ד",
             "במדבר": "הושע פרק ב' פסוק א' עד פסוק כ\"ב",
             "נשא": "שופטים פרק י\"ג פסוק ב' עד פסוק כ\"ה",
             "בהעלותך": "זכריה פרק ב' פסוק י\"ד עד פרק ד' פסוק ז'",
@@ -549,7 +548,7 @@
             "כי תבוא": "ישעיהו פרק ס' פסוק א' עד פסוק כ\"ב",
             "נצבים": "ישעיהו פרק ס\"א פסוק י' עד פרק ס\"ג פסוק ט'",
             "וילך": "הושע פרק י\"ד פסוק ב' עד פסוק י' ומיכה פרק ז' פסוק י\"ח עד כ'",
-            "נצבים-וילך": "ישעיהו פרק ס\"א פסוק י' עד פסוק ס\"ג פסוק ט'",
+            "נצבים-וילך": "ישעיהו פרק ס\"א פסוק י' עד פרק ס\"ג פסוק ט'",
             "האזינו": "שמואל ב' פרק כ\"ב פסוק א' עד פסוק נ\"א",
             "וזאת הברכה": "יהושע פרק א' פסוק א' עד פסוק ט'"
         };
