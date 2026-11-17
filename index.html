@@ -1,0 +1,1769 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>לוח מודעות דיגיטלי - בית הכנסת המרכזי</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Alef:wght@400;700&family=Frank+Ruhl+Libre:wght@400;700;900&family=Assistant:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase Cloud Storage & Realtime Sync Modules -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : {
+                apiKey: "AIzaSyDummyKeyForFallbackOnly12345",
+                authDomain: "synagogue-board-app.firebaseapp.com",
+                projectId: "synagogue-board-app",
+                storageBucket: "synagogue-board-app.appspot.com",
+                messagingSenderId: "1234567890",
+                appId: "1:1234567890:web:abcdef123456"
+            };
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'synagogue-main-board';
+        
+        let app, db, auth;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            window.db = db;
+            window.appId = appId;
+        } catch (e) {
+            console.warn("Cloud connection initialized in offline mode", e);
+        }
+
+        async function initCloudSync() {
+            if (!auth || !db) return;
+
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.warn("Auth fallback triggered:", err);
+            }
+
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'board_settings', 'main');
+            
+            onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const cloudData = docSnap.data();
+                    if (cloudData && cloudData.appData) {
+                        window.appData = {
+                            ...window.defaultData,
+                            ...cloudData.appData,
+                            design: { ...window.defaultData.design, ...(cloudData.appData.design || {}) },
+                            shabbat: { ...window.defaultData.shabbat, ...(cloudData.appData.shabbat || {}) }
+                        };
+                        try {
+                            localStorage.setItem('synagogue_board_data_v2', JSON.stringify(window.appData));
+                        } catch (e) {}
+                        if (typeof window.applyDesignSettings === 'function') window.applyDesignSettings();
+                        if (typeof window.renderDisplay === 'function') {
+                            window.renderDisplay();
+                            window.showToast("הלוח חובר וסונכרן מענן המשרד בלייב!");
+                        }
+                    }
+                }
+            }, (error) => {
+                console.error("Cloud listener error:", error);
+            });
+        }
+
+        window.saveDataToCloud = async function(dataToSave) {
+            if (!db || !auth || !auth.currentUser) return false;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'board_settings', 'main');
+                await setDoc(docRef, { 
+                    appData: dataToSave,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+                return true;
+            } catch (err) {
+                console.error("Error saving to cloud:", err);
+                return false;
+            }
+        };
+
+        if (auth) {
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    initCloudSync();
+                }
+            });
+            if (!auth.currentUser) {
+                initCloudSync();
+            }
+        }
+    </script>
+
+    <style id="dynamicThemeStyle">
+        :root {
+            --bg-main: #0B192C;
+            --bg-card-start: #1E3E62;
+            --bg-card-end: #0B192C;
+            --bg-panel: #001F3F;
+            --accent: #D4AF37;
+            --accent-light: #F4D06F;
+            --accent-dark: #9A7B22;
+            --text-sub: #F9E4B7;
+            --border-radius-card: 1rem;
+            --font-scale: 1;
+        }
+    </style>
+    <style>
+        html {
+            font-size: calc(16px * var(--font-scale));
+        }
+        body {
+            font-family: 'Assistant', sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-sub);
+            overflow-x: hidden;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+        .hebrew-title {
+            font-family: 'Frank Ruhl Libre', serif;
+        }
+        .gold-border {
+            border: 2px solid var(--accent);
+            box-shadow: 0 0 15px color-mix(in srgb, var(--accent) 25%, transparent), inset 0 0 15px color-mix(in srgb, var(--accent) 10%, transparent);
+        }
+        .gold-border-sm {
+            border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+        }
+        .gold-text {
+            color: var(--accent);
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .gold-gradient-bg {
+            background: linear-gradient(135deg, var(--bg-card-start) 0%, var(--bg-card-end) 100%);
+        }
+        .custom-card-radius {
+            border-radius: var(--border-radius-card);
+        }
+        .bg-royalBlue-900 { background-color: var(--bg-main) !important; }
+        .bg-royalBlue-800 { background-color: var(--bg-card-start) !important; }
+        .bg-royalBlue-700 { background-color: var(--bg-panel) !important; }
+        .bg-royalBlue-700\/70 { background-color: color-mix(in srgb, var(--bg-panel) 70%, transparent) !important; }
+        .bg-royalBlue-700\/80 { background-color: color-mix(in srgb, var(--bg-panel) 80%, transparent) !important; }
+        .bg-royalBlue-700\/60 { background-color: color-mix(in srgb, var(--bg-panel) 60%, transparent) !important; }
+        .bg-royalBlue-900\/80 { background-color: color-mix(in srgb, var(--bg-main) 80%, transparent) !important; }
+        .bg-royalBlue-900\/90 { background-color: color-mix(in srgb, var(--bg-main) 90%, transparent) !important; }
+        .text-gold { color: var(--accent) !important; }
+        .text-gold-accent { color: var(--text-sub) !important; }
+        .bg-gold { background-color: var(--accent) !important; }
+        .hover\:bg-gold-light:hover { background-color: var(--accent-light) !important; }
+        .border-gold { border-color: var(--accent) !important; }
+        .border-gold\/20 { border-color: color-mix(in srgb, var(--accent) 20%, transparent) !important; }
+        .border-gold\/30 { border-color: color-mix(in srgb, var(--accent) 30%, transparent) !important; }
+        .border-gold\/40 { border-color: color-mix(in srgb, var(--accent) 40%, transparent) !important; }
+        .bg-gold\/20 { background-color: color-mix(in srgb, var(--accent) 20%, transparent) !important; }
+        .text-royalBlue-900 { color: var(--bg-main) !important; }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-main);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 4px;
+        }
+        .ticker-wrap {
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .ticker {
+            display: inline-block;
+            animation: ticker var(--ticker-speed, 35s) linear infinite;
+        }
+        @keyframes ticker {
+            0% { transform: translate3d(0, 0, 0); }
+            100% { transform: translate3d(-50%, 0, 0); }
+        }
+        .modal-bg {
+            background-color: rgba(5, 12, 22, 0.88);
+            backdrop-filter: blur(10px);
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 10px var(--accent); }
+            50% { box-shadow: 0 0 25px var(--accent-light); }
+        }
+        .next-prayer-highlight {
+            border: 2px solid var(--accent) !important;
+            animation: pulseGlow 2.5s infinite;
+        }
+    </style>
+
+    <!-- Main Application Logic -->
+    <script>
+        const defaultData = {
+            adminPassword: "beyt@1212",
+            design: {
+                themePreset: "royalGold",
+                bgMain: "#0B192C",
+                bgCardStart: "#1E3E62",
+                bgPanel: "#001F3F",
+                accent: "#D4AF37",
+                textSub: "#F9E4B7",
+                borderStyle: "rounded",
+                fontScale: "1",
+                tickerSpeed: "35",
+                showSeconds: true,
+                showZmanim: true,
+                highlightNextPrayer: true,
+                logoIcon: "fa-synagogue",
+                cityGeonameId: "281184",
+                haftarahCustom: "sephardic"
+            },
+            mainTitle: "בית הכנסת המרכזי \"אוהל יצחק\"",
+            subTitle: "לעילוי נשמת יוסף בן רחל ז\"ל | עורך הדירוג והתפילות",
+            shabbat: {
+                parasha: "פרשת השבוע",
+                haftarah: "ישעיהו פרק מ\"ב פסוק ה' עד פרק מ\"ג פסוק י'",
+                candleLighting: "--:--",
+                havdalah: "--:--"
+            },
+            prayers: [
+                { name: "שחרית א'", time: "06:00", note: "כולל אברכים" },
+                { name: "שחרית ב'", time: "07:00", note: "מרכזי" },
+                { name: "שחרית ג'", time: "08:15", note: "מניין אחרון" },
+                { name: "מנחה קטנה", time: "13:30", note: "הפסקה משרדית" },
+                { name: "מנחה גדולה", time: "18:45", note: "סמוך לשקיעה" },
+                { name: "ערבית א'", time: "19:30", note: "מיד לאחר מנחה" },
+                { name: "ערבית ב'", time: "20:30", note: "כולל שיעור קצר" },
+                { name: "ערבית ג'", time: "21:45", note: "מאוחר" }
+            ],
+            zmanim: [
+                { title: "עלות השחר", time: "04:12" },
+                { title: "הנץ החמה", time: "05:38" },
+                { title: "סוף זמן שמע (גר\"א)", time: "09:21" },
+                { title: "חצות היום", time: "12:49" },
+                { title: "שקיעה", time: "19:58" },
+                { title: "צאת הכוכבים", time: "20:25" }
+            ],
+            shiurim: [
+                { title: "דף יומי במסכת ברכות", speaker: "הרב אברהם כהן", time: "05:30 (כל בוקר)", location: "בית המדרש הגדול" },
+                { title: "הלכה יומית במשנה ברורה", speaker: "הרב דוד לוי", time: "19:00 (בין מנחה לערבית)", location: "אולם אירועים קטן" },
+                { title: "פרשת השבוע ורזי החסידות", speaker: "הרב מרדכי שפירא", time: "יום חמישי ב-20:30", location: "בית המדרש המרכזי" }
+            ],
+            memorials: [
+                { name: "יוסף בן רחל ז\"ל", date: "ט' בסיון", description: "יום אזכרת השנה - ת.נ.צ.ב.ה" },
+                { name: "שרה בת מרים ע\"ה", date: "י\"ב בסיון", description: "לעילוי נשמתה הטהורה" },
+                { name: "משה דוד סגל ז\"ל", date: "ט\"ז בסיון", description: "תרומת ארון הקודש" }
+            ],
+            notices: [
+                { title: "שיפוץ עזרת נשים", desc: "העבודות יחלו השבוע ביום ראשון. עמכם הסליחה." },
+                { title: "חלוקת קמחא דפסחא / צדקה", desc: "ניתן להעביר תרומות לגבאי בית הכנסת בהקדם." },
+                { title: "שבת חזון וקידוש מרכזי", desc: "קידוש רב משתתפים באדיבות משפחת אברהמי שיחי'." }
+            ],
+            ticker: "ברוכים הבאים לבית הכנסת המרכזי • נא להקפיד על שמירת כבוד בית הכנסת ואי שימוש בטלפונים סלולריים • היום יחולו שיעורים כרגיל • חודש טוב ומבורך!"
+        };
+        window.defaultData = defaultData;
+
+        const themePresets = {
+            royalGold: { name: "כחול מלכותי וזהב (קלאסי)", bgMain: "#0B192C", bgCardStart: "#1E3E62", bgPanel: "#001F3F", accent: "#D4AF37", textSub: "#F9E4B7" },
+            jerusalemStone: { name: "אבן ירושלמית וברונזה", bgMain: "#1C1917", bgCardStart: "#292524", bgPanel: "#171412", accent: "#EAB308", textSub: "#FEF3C7" },
+            emeraldSephardic: { name: "ירוק אזמרגד וזהב", bgMain: "#04221B", bgCardStart: "#0B3B2E", bgPanel: "#021813", accent: "#FBBF24", textSub: "#D1FAE5" },
+            bordeauxVelvet: { name: "קטיפת בורדו וכסף-זהב", bgMain: "#240812", bgCardStart: "#421122", bgPanel: "#1A050C", accent: "#F59E0B", textSub: "#FCE7F3" },
+            parchmentLight: { name: "קלף בהיר ומסורתי (יום)", bgMain: "#F5EFE6", bgCardStart: "#FFFFFF", bgPanel: "#E8DFCA", accent: "#92400E", textSub: "#292524" }
+        };
+
+        let appData = JSON.parse(JSON.stringify(defaultData));
+        window.appData = appData;
+        
+        const syncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('synagogue_board_sync') : null;
+
+        try {
+            const savedData = localStorage.getItem('synagogue_board_data_v2');
+            if (savedData) {
+                const parsed = JSON.parse(savedData);
+                if (parsed && typeof parsed === 'object') {
+                    appData = { 
+                        ...defaultData, 
+                        ...parsed,
+                        design: { ...defaultData.design, ...(parsed.design || {}) },
+                        shabbat: { ...defaultData.shabbat, ...(parsed.shabbat || {}) }
+                    };
+                    window.appData = appData;
+                }
+            }
+        } catch (e) {
+            console.error("Error reading from localStorage, using defaults", e);
+        }
+
+        function applyDesignSettings() {
+            const d = (appData && appData.design) ? appData.design : defaultData.design;
+            const root = document.documentElement;
+            root.style.setProperty('--bg-main', d.bgMain || '#0B192C');
+            root.style.setProperty('--bg-card-start', d.bgCardStart || '#1E3E62');
+            root.style.setProperty('--bg-card-end', d.bgMain || '#0B192C');
+            root.style.setProperty('--bg-panel', d.bgPanel || '#001F3F');
+            root.style.setProperty('--accent', d.accent || '#D4AF37');
+            root.style.setProperty('--accent-light', d.accent || '#F4D06F');
+            root.style.setProperty('--text-sub', d.textSub || '#F9E4B7');
+            root.style.setProperty('--font-scale', d.fontScale || '1');
+            root.style.setProperty('--ticker-speed', (d.tickerSpeed || '35') + 's');
+
+            let radius = '1rem';
+            if (d.borderStyle === 'sharp') radius = '0.15rem';
+            if (d.borderStyle === 'pill') radius = '1.75rem';
+            root.style.setProperty('--border-radius-card', radius);
+
+            if (d.themePreset === 'parchmentLight') {
+                document.body.classList.add('light-mode-board');
+            } else {
+                document.body.classList.remove('light-mode-board');
+            }
+
+            const logoIconEl = document.getElementById('headerLogoIcon');
+            if (logoIconEl) {
+                logoIconEl.className = `fa-solid ${d.logoIcon || 'fa-synagogue'} text-3xl`;
+            }
+
+            const zmanimBox = document.getElementById('zmanimCardBox');
+            if (zmanimBox) {
+                zmanimBox.style.display = d.showZmanim !== false ? 'block' : 'none';
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            applyDesignSettings();
+            updateDynamicDatesAndZmanim();
+            renderDisplay();
+            initClock();
+
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'synagogue_board_data_v2') {
+                    try {
+                        if (e.newValue) {
+                            const parsed = JSON.parse(e.newValue);
+                            appData = {
+                                ...defaultData,
+                                ...parsed,
+                                design: { ...defaultData.design, ...(parsed.design || {}) },
+                                shabbat: { ...defaultData.shabbat, ...(parsed.shabbat || {}) }
+                            };
+                            window.appData = appData;
+                            applyDesignSettings();
+                            renderDisplay();
+                            showToast("התקבלו עדכונים חדשים ממחשב המשרד!");
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                }
+            });
+
+            if (syncChannel) {
+                syncChannel.onmessage = (event) => {
+                    if (event.data && event.data.type === 'DATA_UPDATE') {
+                        appData = event.data.data;
+                        window.appData = appData;
+                        applyDesignSettings();
+                        renderDisplay();
+                        showToast("הלוח עודכן בלייב ממחשב הניהול!");
+                    }
+                };
+            }
+        });
+
+        // Convert any number (1..999) into Hebrew Gematria letters
+        function numberToGematria(num) {
+            const n = parseInt(num, 10);
+            if (isNaN(n) || n <= 0) return String(num);
+            if (n === 15) return 'ט"ו';
+            if (n === 16) return 'ט"ז';
+            const hundreds = ['', 'ק', 'ר', 'ש', 'ת', 'תק', 'תר', 'תש', 'תת', 'תתק'];
+            const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
+            const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+            const h = Math.floor(n / 100);
+            const rem = n % 100;
+            let res = (hundreds[h] || '');
+            if (rem === 15) {
+                res += 'טו';
+            } else if (rem === 16) {
+                res += 'טז';
+            } else {
+                const t = Math.floor(rem / 10);
+                const o = rem % 10;
+                res += (tens[t] || '') + (ones[o] || '');
+            }
+            if (res.length === 1) {
+                return res + "'";
+            } else if (res.length > 1) {
+                return res.slice(0, -1) + '"' + res.slice(-1);
+            }
+            return res;
+        }
+
+        function convertNumbersToHebrewLetters(str) {
+            if (!str) return "";
+            const specialYears = {
+                '5785': 'תשפ"ה',
+                '5786': 'תשפ"ו',
+                '5787': 'תשפ"ז',
+                '5788': 'תשפ"ח',
+                '5789': 'תשפ"ט',
+                '5790': 'תש"ץ'
+            };
+            let res = String(str);
+            Object.keys(specialYears).forEach(yr => {
+                res = res.replace(new RegExp('\\b' + yr + '\\b', 'g'), specialYears[yr]);
+            });
+            res = res.replace(/\b(\d{1,3})\b/g, (_, digits) => numberToGematria(digits));
+            return res;
+        }
+
+        // Translate Haftarah reference into full Hebrew with Hebrew letters (no digits or English)
+        function formatHaftarahInHebrew(rawHaftarah) {
+            if (!rawHaftarah) return "";
+            const tanakhBooksHe = {
+                "Joshua": "יהושע",
+                "Judges": "שופטים",
+                "I Samuel": "שמואל א'",
+                "II Samuel": "שמואל ב'",
+                "1 Samuel": "שמואל א'",
+                "2 Samuel": "שמואל ב'",
+                "I Kings": "מלכים א'",
+                "II Kings": "מלכים ב'",
+                "1 Kings": "מלכים א'",
+                "2 Kings": "מלכים ב'",
+                "Isaiah": "ישעיהו",
+                "Jeremiah": "ירמיהו",
+                "Ezekiel": "יחזקאל",
+                "Hosea": "הושע",
+                "Joel": "יואל",
+                "Amos": "עמוס",
+                "Obadiah": "עובדיה",
+                "Jonah": "יונה",
+                "Micah": "מיכה",
+                "Nahum": "נחום",
+                "Habakkuk": "חבקוק",
+                "Zephaniah": "צפניה",
+                "Haggai": "חגי",
+                "Zechariah": "זכריה",
+                "Malachi": "מלאכי",
+                "Psalms": "תהילים",
+                "Proverbs": "משלי",
+                "Job": "איוב"
+            };
+
+            let text = String(rawHaftarah).trim();
+
+            // Replace English book names with Hebrew names (longest keys first)
+            Object.keys(tanakhBooksHe)
+                .sort((a, b) => b.length - a.length)
+                .forEach(engBook => {
+                    const regex = new RegExp(engBook.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+                    text = text.replace(regex, tanakhBooksHe[engBook]);
+                });
+
+            // Format "chapter:verse - chapter:verse" into Hebrew words & Gematria
+            text = text.replace(/(\d+):(\d+)\s*[-–]\s*(\d+):(\d+)/g, (_, c1, v1, c2, v2) => {
+                return `פרק ${numberToGematria(c1)} פסוק ${numberToGematria(v1)} עד פרק ${numberToGematria(c2)} פסוק ${numberToGematria(v2)}`;
+            });
+
+            // Format "chapter:verse - verse" within same chapter
+            text = text.replace(/(\d+):(\d+)\s*[-–]\s*(\d+)/g, (_, c1, v1, v2) => {
+                return `פרק ${numberToGematria(c1)} פסוקים ${numberToGematria(v1)} עד ${numberToGematria(v2)}`;
+            });
+
+            // Format standalone "chapter:verse"
+            text = text.replace(/(\d+):(\d+)/g, (_, c1, v1) => {
+                return `פרק ${numberToGematria(c1)} פסוק ${numberToGematria(v1)}`;
+            });
+
+            // Convert any remaining digits into Gematria letters
+            text = convertNumbersToHebrewLetters(text);
+            return text;
+        }
+
+        // Complete Sephardic / Edot HaMizrach Haftarah mapping in full Hebrew letters
+        const sephardicHaftarotMap = {
+            "בראשית": "ישעיהו פרק מ\"ב פסוק ה' עד פסוק כ\"א",
+            "נח": "ישעיהו פרק נ\"ד פסוק א' עד פסוק י'",
+            "לך לך": "ישעיהו פרק מ' פסוק כ\"ז עד פרק מ\"א פסוק ט\"ז",
+            "וירא": "מלכים ב' פרק ד' פסוק א' עד פסוק כ\"ג",
+            "חיי שרה": "מלכים א' פרק א' פסוק א' עד פסוק ל\"א",
+            "תולדות": "מלאכי פרק א' פסוק א' עד פרק ב' פסוק ז'",
+            "ויצא": "הושע פרק י\"א פסוק ז' עד פרק י\"ב פסוק י\"ב",
+            "וישלח": "עובדיה פרק א' פסוק א' עד פסוק כ\"א",
+            "וישב": "עמוס פרק ב' פסוק ו' עד פרק ג' פסוק ח'",
+            "מקץ": "מלכים א' פרק ג' פסוק ט\"ו עד פרק ד' פסוק א'",
+            "ויגש": "יחזקאל פרק ל\"ז פסוק ט\"ו עד פסוק כ\"ח",
+            "ויחי": "מלכים א' פרק ב' פסוק א' עד פסוק י\"ב",
+            "שמות": "ירמיהו פרק א' פסוק א' עד פרק ב' פסוק ג'",
+            "וארא": "יחזקאל פרק כ\"ח פסוק כ\"ה עד פרק כ\"ט פסוק כ\"א",
+            "בא": "ירמיהו פרק מ\"ו פסוק י\"ג עד פסוק כ\"ח",
+            "בשלח": "שופטים פרק ה' פסוק א' עד פסוק ל\"א",
+            "יתרו": "ישעיהו פרק ו' פסוק א' עד פסוק י\"ג",
+            "משפטים": "ירמיהו פרק ל\"ד פסוק ח' עד פסוק כ\"ב ופרק ל\"ג פסוק כ\"ה עד כ\"ו",
+            "תרומה": "מלכים א' פרק ה' פסוק כ\"ו עד פרק ו' פסוק י\"ג",
+            "תצוה": "יחזקאל פרק מ\"ג פסוק י' עד פסוק כ\"ז",
+            "כי תשא": "מלכים א' פרק י\"ח פסוק כ' עד פסוק ל\"ט",
+            "ויקהל": "מלכים א' פרק ז' פסוק י\"ג עד פסוק כ\"ו",
+            "פקודי": "מלכים א' פרק ז' פסוק מ' עד פסוק נ'",
+            "ויקהל-פקודי": "מלכים א' פרק ז' פסוק מ' עד פסוק נ'",
+            "ויקרא": "ישעיהו פרק מ\"ג פסוק כ\"א עד פרק מ\"ד פסוק כ\"ג",
+            "צו": "ירמיהו פרק ז' פסוק כ\"א עד פרק ח' פסוק ג' ופרק ט' פסוק כ\"ב עד כ\"ג",
+            "שמיני": "שמואל ב' פרק ו' פסוק א' עד פסוק י\"ט",
+            "תזריע": "מלכים ב' פרק ד' פסוק מ\"ב עד פרק ה' פסוק י\"ט",
+            "מצורע": "מלכים ב' פרק ז' פסוק ג' עד פסוק כ'",
+            "תזריע-מצורע": "מלכים ב' פרק ז' פסוק ג' עד פסוק כ'",
+            "אחרי מות": "יחזקאל פרק כ\"ב פסוק א' עד פסוק ט\"ז",
+            "קדושים": "יחזקאל פרק כ' פסוק ב' עד פסוק כ'",
+            "אחרי מות-קדושים": "יחזקאל פרק כ' פסוק ב' עד פסוק כ'",
+            "אמור": "יחזקאל פרק מ\"ד פסוק ט\"ו עד פסוק ל\"א",
+            "בהר": "ירמיהו פרק ל\"ב פסוק ו' עד פסוק כ\"ז",
+            "בחוקותי": "ירמיהו פרק ט\"ז פסוק י\"ט עד פרק י\"ז פסוק י\"ד",
+            "בהר-בחוקותי": "ירמיהו פרק ט\"ז פסוק י\"ט עד פרק י\"ז פסוק י\"ד",
+            "במדבר": "הושע פרק ב' פסוק א' עד פסוק כ\"ב",
+            "נשא": "שופטים פרק י\"ג פסוק ב' עד פסוק כ\"ה",
+            "בהעלותך": "זכריה פרק ב' פסוק י\"ד עד פרק ד' פסוק ז'",
+            "שלח": "יהושע פרק ב' פסוק א' עד פסוק כ\"ד",
+            "קרח": "שמואל א' פרק י\"א פסוק י\"ד עד פרק י\"ב פסוק כ\"ב",
+            "חקת": "שופטים פרק י\"א פסוק א' עד פסוק ל\"ג",
+            "בלק": "מיכה פרק ה' פסוק ו' עד פרק ו' פסוק ח'",
+            "חקת-בלק": "מיכה פרק ה' פסוק ו' עד פסוק ח'",
+            "פנחס": "מלכים א' פרק י\"ח פסוק מ\"ו עד פרק י\"ט פסוק כ\"א",
+            "מטות": "ירמיהו פרק א' פסוק א' עד פרק ב' פסוק ג'",
+            "מסעי": "ירמיהו פרק ב' פסוק ד' עד פסוק כ\"ח ופרק ד' פסוק א' עד ב'",
+            "מטות-מסעי": "ירמיהו פרק ב' פסוק ד' עד פסוק כ\"ח ופרק ד' פסוק א' עד ב'",
+            "דברים": "ישעיהו פרק א' פסוק א' עד פסוק כ\"ז",
+            "ואתחנן": "ישעיהו פרק מ' פסוק א' עד פסוק כ\"ו",
+            "עקב": "ישעיהו פרק מ\"ט פסוק י\"ד עד פרק נ\"א פסוק ג'",
+            "ראה": "ישעיהו פרק נ\"ד פסוק י\"א עד פרק נ\"ה פסוק ה'",
+            "שופטים": "ישעיהו פרק נ\"א פסוק י\"ב עד פרק נ\"ב פסוק י\"ב",
+            "כי תצא": "ישעיהו פרק נ\"ד פסוק א' עד פסוק י'",
+            "כי תבוא": "ישעיהו פרק ס' פסוק א' עד פסוק כ\"ב",
+            "נצבים": "ישעיהו פרק ס\"א פסוק י' עד פרק ס\"ג פסוק ט'",
+            "וילך": "הושע פרק י\"ד פסוק ב' עד פסוק י' ומיכה פרק ז' פסוק י\"ח עד כ'",
+            "נצבים-וילך": "ישעיהו פרק ס\"א פסוק י' עד פסוק ס\"ג פסוק ט'",
+            "האזינו": "שמואל ב' פרק כ\"ב פסוק א' עד פסוק נ\"א",
+            "וזאת הברכה": "יהושע פרק א' פסוק א' עד פסוק ט'"
+        };
+
+        function getHaftarahByCustom(parashaHeb, leyningObj) {
+            const custom = (appData.design && appData.design.haftarahCustom) ? appData.design.haftarahCustom : "sephardic";
+            if (custom === "sephardic") {
+                if (leyningObj && leyningObj.haftarah_sephardic) {
+                    return formatHaftarahInHebrew(leyningObj.haftarah_sephardic);
+                }
+                const cleanParasha = String(parashaHeb || "").replace(/^פרשת\s+/, "").trim();
+                if (sephardicHaftarotMap[cleanParasha]) {
+                    return sephardicHaftarotMap[cleanParasha];
+                }
+            }
+            if (leyningObj && leyningObj.haftarah) {
+                return formatHaftarahInHebrew(leyningObj.haftarah);
+            }
+            return "";
+        }
+
+        function saveToPersistentStorage() {
+            try {
+                localStorage.setItem('synagogue_board_data_v2', JSON.stringify(appData));
+                window.appData = appData;
+                
+                if (syncChannel) {
+                    syncChannel.postMessage({
+                        type: 'DATA_UPDATE',
+                        data: appData
+                    });
+                }
+
+                if (typeof window.saveDataToCloud === 'function') {
+                    window.saveDataToCloud(appData);
+                }
+            } catch (e) {
+                console.error("Failed to persist data", e);
+            }
+        }
+
+        function updateDynamicDatesAndZmanim() {
+            const now = new Date();
+
+            const daysOfWeek = ["יום ראשון", "יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "שבת קודש"];
+            const dayOfWeekEl = document.getElementById('hebrewDayOfWeek');
+            if (dayOfWeekEl) {
+                dayOfWeekEl.innerText = daysOfWeek[now.getDay()];
+            }
+
+            const monthsHebrewName = ["בינואר", "בפברואר", "במרץ", "באפריל", "במאי", "ביוני", "ביולי", "באוגוסט", "בספטמבר", "באוקטובר", "בנובמבר", "בדצמבר"];
+            const gregDateEl = document.getElementById('gregorianDate');
+            if (gregDateEl) {
+                gregDateEl.innerText = `${now.getDate()} ${monthsHebrewName[now.getMonth()]} ${now.getFullYear()}`;
+            }
+
+            fetch(`https://www.hebcal.com/converter?cfg=json&gy=${now.getFullYear()}&gm=${now.getMonth()+1}&gd=${now.getDate()}&g2h=1`)
+                .then(res => res.json())
+                .then(hebData => {
+                    if (hebData && hebData.hebrew) {
+                        const hebDateEl = document.getElementById('hebrewDate');
+                        if (hebDateEl) {
+                            hebDateEl.innerText = convertNumbersToHebrewLetters(hebData.hebrew);
+                        }
+                    }
+                })
+                .catch(err => console.log("Hebcal date fallback", err));
+
+            calculateAccurateZmanim(now);
+            fetchShabbatDetails(now);
+        }
+
+        function fetchShabbatDetails(date) {
+            const geoId = (appData.design && appData.design.cityGeonameId) ? appData.design.cityGeonameId : "281184";
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const candleOffset = geoId === "281184" ? 40 : 20;
+            const url = `https://www.hebcal.com/shabbat?cfg=json&geonameid=${geoId}&gy=${year}&gm=${month}&gd=${day}&M=on&b=${candleOffset}&lg=he`;
+            
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && Array.isArray(data.items)) {
+                        let parashaName = "";
+                        let haftarahName = "";
+                        let candlesTime = "";
+                        let havdalahTime = "";
+
+                        data.items.forEach(item => {
+                            if (item.category === "parashat") {
+                                parashaName = item.hebrew || item.title || "";
+                                haftarahName = getHaftarahByCustom(parashaName, item.leyning);
+                            } else if (item.category === "candles" && item.date) {
+                                const d = new Date(item.date);
+                                candlesTime = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', hour12: false });
+                            } else if (item.category === "havdalah" && item.date) {
+                                const d = new Date(item.date);
+                                havdalahTime = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', hour12: false });
+                            }
+                        });
+
+                        if (!appData.shabbat) {
+                            appData.shabbat = { parasha: "פרשת השבוע", haftarah: "-", candleLighting: "--:--", havdalah: "--:--" };
+                        }
+                        if (parashaName) appData.shabbat.parasha = parashaName;
+                        if (haftarahName) appData.shabbat.haftarah = haftarahName;
+                        if (candlesTime) appData.shabbat.candleLighting = candlesTime;
+                        if (havdalahTime) appData.shabbat.havdalah = havdalahTime;
+
+                        saveToPersistentStorage();
+                        renderDisplay();
+                    }
+                })
+                .catch(err => console.log("Shabbat API fallback", err));
+        }
+
+        function calculateAccurateZmanim(date) {
+            const geoId = (appData.design && appData.design.cityGeonameId) ? appData.design.cityGeonameId : "281184";
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const url = `https://www.hebcal.com/zmanim?cfg=json&geonameid=${geoId}&iso=${year}-${month}-${day}`;
+            
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.times) {
+                        const formatTime = (isoStr) => {
+                            if (!isoStr) return "--:--";
+                            const d = new Date(isoStr);
+                            return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        };
+
+                        let tzeitStr = "--:--";
+                        if (data.times.sunset) {
+                            const sunsetDate = new Date(data.times.sunset);
+                            sunsetDate.setMinutes(sunsetDate.getMinutes() + 20);
+                            tzeitStr = sunsetDate.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        }
+
+                        appData.zmanim = [
+                            { title: "עלות השחר", time: formatTime(data.times.alotHaShachar) },
+                            { title: "הנץ החמה", time: formatTime(data.times.sunrise) },
+                            { title: "סוף זמן שמע (גר\"א)", time: formatTime(data.times.sofZmanShma) },
+                            { title: "חצות היום", time: formatTime(data.times.chatzot) },
+                            { title: "שקיעה", time: formatTime(data.times.sunset) },
+                            { title: "צאת הכוכבים (20 דק' מהשקיעה)", time: tzeitStr }
+                        ];
+                        saveToPersistentStorage();
+                        renderDisplay();
+                    }
+                })
+                .catch(err => console.log("Zmanim API fallback", err));
+        }
+
+        function initClock() {
+            updateClock();
+            setInterval(updateClock, 1000);
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const clockEl = document.getElementById('digitalClock');
+            const showSec = (appData.design && appData.design.showSeconds !== undefined) ? appData.design.showSeconds : true;
+            if (clockEl) {
+                clockEl.innerText = showSec ? `${hours}:${minutes}:${seconds}` : `${hours}:${minutes}`;
+            }
+        }
+
+        function getNextPrayerIndex() {
+            if (!appData.design || appData.design.highlightNextPrayer === false) return -1;
+            const now = new Date();
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+            for (let i = 0; i < appData.prayers.length; i++) {
+                const match = String(appData.prayers[i].time).match(/(\d{1,2}):(\d{2})/);
+                if (match) {
+                    const pMinutes = parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+                    if (pMinutes >= currentMinutes) return i;
+                }
+            }
+            return appData.prayers.length > 0 ? 0 : -1;
+        }
+
+        function renderDisplay() {
+            if (window.appData) appData = window.appData;
+            const isLight = appData.design && appData.design.themePreset === 'parchmentLight';
+            const primaryTextClass = isLight ? 'text-stone-900' : 'text-white';
+
+            const mainTitleEl = document.getElementById('headerMainTitle');
+            const subTitleEl = document.getElementById('headerSubTitle');
+            if (mainTitleEl) mainTitleEl.innerText = appData.mainTitle;
+            if (subTitleEl) subTitleEl.innerText = appData.subTitle;
+
+            // Shabbat Parasha, Haftarah & Times
+            const shabbatInfo = appData.shabbat || defaultData.shabbat;
+            const parashaEl = document.getElementById('displayParashaName');
+            const haftarahEl = document.getElementById('displayHaftarahName');
+            const candleEl = document.getElementById('displayCandleLighting');
+            const havdalahEl = document.getElementById('displayHavdalah');
+            if (parashaEl) parashaEl.innerText = shabbatInfo.parasha || "פרשת השבוע";
+            if (haftarahEl) haftarahEl.innerText = shabbatInfo.haftarah || "-";
+            if (candleEl) candleEl.innerText = shabbatInfo.candleLighting || "--:--";
+            if (havdalahEl) havdalahEl.innerText = shabbatInfo.havdalah || "--:--";
+
+            // Prayer Times
+            const nextIdx = getNextPrayerIndex();
+            const prayerContainer = document.getElementById('prayerTimesList');
+            if (prayerContainer) {
+                prayerContainer.innerHTML = appData.prayers.map((p, idx) => {
+                    const isNext = idx === nextIdx;
+                    return `
+                    <div class="bg-royalBlue-700/70 hover:bg-royalBlue-700 p-3 rounded-xl border border-gold/20 flex justify-between items-center transition-all ${isNext ? 'next-prayer-highlight' : ''}">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold ${primaryTextClass} text-base md:text-lg hebrew-title">${p.name}</span>
+                                ${isNext ? '<span class="text-[10px] bg-gold text-royalBlue-900 font-bold px-2 py-0.5 rounded-full">התפילה הבאה</span>' : ''}
+                            </div>
+                            <p class="text-xs text-gold-accent">${p.note || ''}</p>
+                        </div>
+                        <div class="bg-royalBlue-900/90 px-4 py-1.5 rounded-lg border border-gold/40 text-gold font-bold font-mono text-lg tracking-wider shadow">
+                            ${p.time}
+                        </div>
+                    </div>
+                `}).join('');
+            }
+
+            // Zmanim
+            const zmanimContainer = document.getElementById('zmanimList');
+            if (zmanimContainer) {
+                zmanimContainer.innerHTML = appData.zmanim.map(z => `
+                    <div class="bg-royalBlue-700/60 p-2.5 rounded-lg border border-gold/20 flex flex-col">
+                        <span class="text-xs text-gold-accent font-medium">${z.title}</span>
+                        <span class="text-sm font-bold font-mono ${primaryTextClass} mt-0.5">${z.time}</span>
+                    </div>
+                `).join('');
+            }
+
+            // Shiurim
+            const shiurimContainer = document.getElementById('shiurimList');
+            if (shiurimContainer) {
+                shiurimContainer.innerHTML = appData.shiurim.map(s => `
+                    <div class="bg-royalBlue-700/70 p-3.5 rounded-xl border border-gold/20">
+                        <div class="flex justify-between items-start">
+                            <h4 class="font-bold ${primaryTextClass} hebrew-title text-base">${s.title}</h4>
+                            <span class="text-xs bg-gold/20 text-gold px-2 py-0.5 rounded border border-gold/30 font-mono">${s.time}</span>
+                        </div>
+                        <p class="text-xs text-gold-accent mt-1"><i class="fa-solid fa-chalkboard-user ml-1 text-gold"></i> ${s.speaker}</p>
+                        <p class="text-[11px] ${isLight ? 'text-stone-700' : 'text-gray-300'} mt-0.5"><i class="fa-solid fa-location-dot ml-1 text-gold"></i> ${s.location}</p>
+                    </div>
+                `).join('');
+            }
+
+            // Memorials
+            const memorialsContainer = document.getElementById('memorialsList');
+            if (memorialsContainer) {
+                memorialsContainer.innerHTML = appData.memorials.map(m => `
+                    <div class="bg-royalBlue-700/70 p-3.5 rounded-xl border border-gold/20 flex justify-between items-center">
+                        <div>
+                            <h4 class="font-bold ${primaryTextClass} hebrew-title text-base">${m.name}</h4>
+                            <p class="text-xs text-gold-accent mt-0.5">${m.description}</p>
+                        </div>
+                        <span class="text-xs bg-gold/20 text-gold px-2.5 py-1 rounded-lg border border-gold/40 font-bold whitespace-nowrap">${m.date}</span>
+                    </div>
+                `).join('');
+            }
+
+            // General Notices
+            const noticesContainer = document.getElementById('generalNoticesList');
+            if (noticesContainer) {
+                noticesContainer.innerHTML = appData.notices.map(n => `
+                    <div class="bg-royalBlue-700/70 p-4 rounded-xl border border-gold/30 flex flex-col justify-between">
+                        <div>
+                            <h4 class="font-bold text-gold hebrew-title text-base mb-1 flex items-center gap-1.5">
+                                <i class="fa-solid fa-star text-xs"></i> ${n.title}
+                            </h4>
+                            <p class="text-xs ${isLight ? 'text-stone-800' : 'text-gray-200'} leading-relaxed">${n.desc}</p>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // Ticker
+            const tickerContent = document.getElementById('tickerContent');
+            if (tickerContent) {
+                tickerContent.innerText = appData.ticker + "   ***   " + appData.ticker;
+            }
+        }
+
+        // Security / Password Protection
+        function promptAdminAccess() {
+            const loginModal = document.getElementById('loginModal');
+            const passInput = document.getElementById('adminPasswordInput');
+            const errorMsg = document.getElementById('loginErrorMsg');
+            if (errorMsg) errorMsg.classList.add('hidden');
+            if (passInput) passInput.value = '';
+            if (loginModal) {
+                loginModal.classList.remove('hidden');
+                setTimeout(() => passInput && passInput.focus(), 100);
+            }
+        }
+
+        function closeLoginModal() {
+            const loginModal = document.getElementById('loginModal');
+            if (loginModal) loginModal.classList.add('hidden');
+        }
+
+        function verifyAdminPassword(e) {
+            if (e) e.preventDefault();
+            const passInput = document.getElementById('adminPasswordInput');
+            const errorMsg = document.getElementById('loginErrorMsg');
+            const entered = passInput ? passInput.value : '';
+            const currentValidPass = appData.adminPassword || "beyt@1212";
+
+            if (entered === currentValidPass) {
+                closeLoginModal();
+                openAdminModal();
+            } else {
+                if (errorMsg) errorMsg.classList.remove('hidden');
+                if (passInput) {
+                    passInput.value = '';
+                    passInput.focus();
+                }
+            }
+        }
+
+        function togglePasswordVisibility(inputId, btnEl) {
+            const inp = document.getElementById(inputId);
+            if (!inp) return;
+            if (inp.type === 'password') {
+                inp.type = 'text';
+                btnEl.innerHTML = '<i class="fa-solid fa-eye-slash"></i>';
+            } else {
+                inp.type = 'password';
+                btnEl.innerHTML = '<i class="fa-solid fa-eye"></i>';
+            }
+        }
+
+        // Admin Modal Controls
+        function openAdminModal() {
+            const mainTitleInput = document.getElementById('inputMainTitle');
+            const subTitleInput = document.getElementById('inputSubTitle');
+            if (mainTitleInput) mainTitleInput.value = appData.mainTitle;
+            if (subTitleInput) subTitleInput.value = appData.subTitle;
+
+            const shabbatInfo = appData.shabbat || defaultData.shabbat;
+            const setValEl = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+            setValEl('inputParashaName', shabbatInfo.parasha);
+            setValEl('inputHaftarahName', shabbatInfo.haftarah);
+            setValEl('inputCandleLighting', shabbatInfo.candleLighting);
+            setValEl('inputHavdalah', shabbatInfo.havdalah);
+
+            populateSettingsInputs();
+
+            renderAdminPrayers();
+            renderAdminShiurim();
+            renderAdminMemorials();
+            renderAdminNotices();
+
+            const modal = document.getElementById('adminModal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function populateSettingsInputs() {
+            const d = appData.design || defaultData.design;
+            const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+            const setCheck = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+
+            setVal('settingThemePreset', d.themePreset || 'royalGold');
+            setVal('settingBgMain', d.bgMain || '#0B192C');
+            setVal('settingBgCardStart', d.bgCardStart || '#1E3E62');
+            setVal('settingBgPanel', d.bgPanel || '#001F3F');
+            setVal('settingAccent', d.accent || '#D4AF37');
+            setVal('settingTextSub', d.textSub || '#F9E4B7');
+            setVal('settingBorderStyle', d.borderStyle || 'rounded');
+            setVal('settingFontScale', d.fontScale || '1');
+            setVal('settingTickerSpeed', d.tickerSpeed || '35');
+            setVal('settingLogoIcon', d.logoIcon || 'fa-synagogue');
+            setVal('settingCityGeo', d.cityGeonameId || '281184');
+            setVal('settingHaftarahCustom', d.haftarahCustom || 'sephardic');
+
+            setCheck('settingShowSeconds', d.showSeconds !== false);
+            setCheck('settingShowZmanim', d.showZmanim !== false);
+            setCheck('settingHighlightPrayer', d.highlightNextPrayer !== false);
+
+            setVal('settingNewPassword', '');
+            setVal('settingConfirmPassword', '');
+            const passStatus = document.getElementById('passwordChangeStatus');
+            if (passStatus) passStatus.classList.add('hidden');
+        }
+
+        function onThemePresetChange(presetKey) {
+            const preset = themePresets[presetKey];
+            if (!preset) return;
+            document.getElementById('settingBgMain').value = preset.bgMain;
+            document.getElementById('settingBgCardStart').value = preset.bgCardStart;
+            document.getElementById('settingBgPanel').value = preset.bgPanel;
+            document.getElementById('settingAccent').value = preset.accent;
+            document.getElementById('settingTextSub').value = preset.textSub;
+            previewDesignLive();
+        }
+
+        function previewDesignLive() {
+            const tempDesign = {
+                themePreset: document.getElementById('settingThemePreset').value,
+                bgMain: document.getElementById('settingBgMain').value,
+                bgCardStart: document.getElementById('settingBgCardStart').value,
+                bgPanel: document.getElementById('settingBgPanel').value,
+                accent: document.getElementById('settingAccent').value,
+                textSub: document.getElementById('settingTextSub').value,
+                borderStyle: document.getElementById('settingBorderStyle').value,
+                fontScale: document.getElementById('settingFontScale').value,
+                tickerSpeed: document.getElementById('settingTickerSpeed').value,
+                logoIcon: document.getElementById('settingLogoIcon').value,
+                cityGeonameId: document.getElementById('settingCityGeo').value,
+                haftarahCustom: document.getElementById('settingHaftarahCustom').value,
+                showSeconds: document.getElementById('settingShowSeconds').checked,
+                showZmanim: document.getElementById('settingShowZmanim').checked,
+                highlightNextPrayer: document.getElementById('settingHighlightPrayer').checked
+            };
+            appData.design = tempDesign;
+            applyDesignSettings();
+            renderDisplay();
+        }
+
+        function updateAdminPasswordOnly() {
+            const newPass = document.getElementById('settingNewPassword').value.trim();
+            const confirmPass = document.getElementById('settingConfirmPassword').value.trim();
+            const statusEl = document.getElementById('passwordChangeStatus');
+
+            if (!newPass || newPass.length < 4) {
+                statusEl.innerText = "הקוד החדש חייב להכיל לפחות 4 תווים!";
+                statusEl.className = "text-xs text-red-400 font-bold mt-2";
+                statusEl.classList.remove('hidden');
+                return;
+            }
+            if (newPass !== confirmPass) {
+                statusEl.innerText = "הקודים שהוזנו אינם תואמים!";
+                statusEl.className = "text-xs text-red-400 font-bold mt-2";
+                statusEl.classList.remove('hidden');
+                return;
+            }
+
+            appData.adminPassword = newPass;
+            saveToPersistentStorage();
+            document.getElementById('settingNewPassword').value = '';
+            document.getElementById('settingConfirmPassword').value = '';
+            statusEl.innerText = "קוד הגישה עודכן ונשמר בהצלחה!";
+            statusEl.className = "text-xs text-green-400 font-bold mt-2";
+            statusEl.classList.remove('hidden');
+            showToast("קוד הכניסה לפאנל המשרד שונה בהצלחה!");
+        }
+
+        function toggleFullScreenMode() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {
+                    showToast("לא ניתן להפעיל מסך מלא בדפדפן זה");
+                });
+            } else if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+
+        function closeAdminModal() {
+            const modal = document.getElementById('adminModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function switchAdminTab(tabId, btnElement) {
+            document.querySelectorAll('.admin-tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.admin-tab').forEach(el => {
+                el.classList.remove('border-b-2', 'border-gold', 'text-gold');
+                el.classList.add('text-gray-400');
+            });
+
+            const targetTab = document.getElementById(tabId);
+            if (targetTab) targetTab.classList.remove('hidden');
+            
+            const activeBtn = btnElement || (typeof event !== 'undefined' ? event.currentTarget : null);
+            if (activeBtn) {
+                activeBtn.classList.remove('text-gray-400');
+                activeBtn.classList.add('border-b-2', 'border-gold', 'text-gold');
+            }
+        }
+
+        function renderAdminPrayers() {
+            const container = document.getElementById('adminPrayersContainer');
+            if (!container) return;
+            container.innerHTML = appData.prayers.map((p, idx) => `
+                <div class="flex gap-2 items-center bg-royalBlue-900/80 p-3 rounded-lg border border-gold/20">
+                    <input type="text" value="${p.name}" placeholder="שם תפילה" class="p_name flex-1 bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white">
+                    <input type="text" value="${p.time}" placeholder="שעה" class="p_time w-24 bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white font-mono text-center">
+                    <input type="text" value="${p.note || ''}" placeholder="הערה" class="p_note flex-1 bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white">
+                    <button type="button" onclick="removeArrayItem('prayers', ${idx})" class="text-red-400 hover:text-red-300 p-2"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            `).join('');
+        }
+
+        function renderAdminShiurim() {
+            const container = document.getElementById('adminShiurimContainer');
+            if (!container) return;
+            container.innerHTML = appData.shiurim.map((s, idx) => `
+                <div class="bg-royalBlue-900/80 p-3 rounded-lg border border-gold/20 space-y-2">
+                    <div class="flex gap-2">
+                        <input type="text" value="${s.title}" placeholder="שם השיעור" class="s_title flex-1 bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white">
+                        <input type="text" value="${s.time}" placeholder="שעה / יום" class="s_time w-40 bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white font-mono">
+                        <button type="button" onclick="removeArrayItem('shiurim', ${idx})" class="text-red-400 hover:text-red-300 p-2"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" value="${s.speaker}" placeholder="שם המוסר" class="s_speaker flex-1 bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white">
+                        <input type="text" value="${s.location}" placeholder="מיקום" class="s_location flex-1 bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white">
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderAdminMemorials() {
+            const container = document.getElementById('adminMemorialsContainer');
+            if (!container) return;
+            container.innerHTML = appData.memorials.map((m, idx) => `
+                <div class="bg-royalBlue-900/80 p-3 rounded-lg border border-gold/20 space-y-2">
+                    <div class="flex gap-2">
+                        <input type="text" value="${m.name}" placeholder="שם הנפטר/ת" class="m_name flex-1 bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white font-bold">
+                        <input type="text" value="${m.date}" placeholder="תאריך עברי" class="m_date w-36 bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white text-center font-bold">
+                        <button type="button" onclick="removeArrayItem('memorials', ${idx})" class="text-red-400 hover:text-red-300 p-2"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                    <input type="text" value="${m.description}" placeholder="תיאור / הקדשה" class="m_desc w-full bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white">
+                </div>
+            `).join('');
+        }
+
+        function renderAdminNotices() {
+            const container = document.getElementById('adminNoticesContainer');
+            if (!container) return;
+            let html = `
+                <div class="mb-4 bg-royalBlue-900/90 p-4 rounded-xl border border-gold/40">
+                    <label class="block text-sm font-medium text-gold mb-1">טקסט הודעה רצה בתחתית המסך (Ticker)</label>
+                    <textarea id="inputTicker" rows="2" class="w-full bg-royalBlue-900 border border-gold/30 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-gold">${appData.ticker}</textarea>
+                </div>
+                <h5 class="text-md font-bold text-gold mb-2">מודעות לוח מרכזיות:</h5>
+            `;
+            html += appData.notices.map((n, idx) => `
+                <div class="bg-royalBlue-900/80 p-3 rounded-lg border border-gold/20 space-y-2">
+                    <div class="flex gap-2">
+                        <input type="text" value="${n.title}" placeholder="כותרת הודעה" class="n_title flex-1 bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white font-bold">
+                        <button type="button" onclick="removeArrayItem('notices', ${idx})" class="text-red-400 hover:text-red-300 p-2"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                    <textarea placeholder="תוכן ההודעה" class="n_desc w-full bg-royalBlue-900 border border-gold/30 rounded p-2 text-sm text-white" rows="2">${n.desc}</textarea>
+                </div>
+            `).join('');
+            container.innerHTML = html;
+        }
+
+        function addPrayerRow() {
+            appData.prayers.push({ name: "תפילה חדשה", time: "00:00", note: "" });
+            renderAdminPrayers();
+        }
+        function addShiurRow() {
+            appData.shiurim.push({ title: "שיעור חדש", speaker: "רב בית הכנסת", time: "יום שלישי 20:00", location: "בית המדרש" });
+            renderAdminShiurim();
+        }
+        function addMemorialRow() {
+            appData.memorials.push({ name: "שם הנפטר/ת ז\"ל", date: "א' בחודש", description: "לעילוי נשמה" });
+            renderAdminMemorials();
+        }
+        function addNoticeRow() {
+            appData.notices.push({ title: "הודעה חדשה", desc: "פרטי ההודעה יופיעו כאן..." });
+            renderAdminNotices();
+        }
+
+        function removeArrayItem(type, index) {
+            appData[type].splice(index, 1);
+            if (type === 'prayers') renderAdminPrayers();
+            if (type === 'shiurim') renderAdminShiurim();
+            if (type === 'memorials') renderAdminMemorials();
+            if (type === 'notices') renderAdminNotices();
+        }
+
+        function saveAllChanges() {
+            const mainTitleInput = document.getElementById('inputMainTitle');
+            const subTitleInput = document.getElementById('inputSubTitle');
+            if (mainTitleInput) appData.mainTitle = mainTitleInput.value;
+            if (subTitleInput) appData.subTitle = subTitleInput.value;
+
+            if (!appData.shabbat) appData.shabbat = {};
+            const pInput = document.getElementById('inputParashaName');
+            const hInput = document.getElementById('inputHaftarahName');
+            const cInput = document.getElementById('inputCandleLighting');
+            const havInput = document.getElementById('inputHavdalah');
+            if (pInput && pInput.value) appData.shabbat.parasha = pInput.value;
+            if (hInput && hInput.value) appData.shabbat.haftarah = formatHaftarahInHebrew(hInput.value);
+            if (cInput && cInput.value) appData.shabbat.candleLighting = cInput.value;
+            if (havInput && havInput.value) appData.shabbat.havdalah = havInput.value;
+
+            const prayerRows = document.querySelectorAll('#adminPrayersContainer > div');
+            appData.prayers = Array.from(prayerRows).map(row => ({
+                name: row.querySelector('.p_name').value,
+                time: row.querySelector('.p_time').value,
+                note: row.querySelector('.p_note').value
+            }));
+
+            const shiurRows = document.querySelectorAll('#adminShiurimContainer > div');
+            appData.shiurim = Array.from(shiurRows).map(row => ({
+                title: row.querySelector('.s_title').value,
+                time: row.querySelector('.s_time').value,
+                speaker: row.querySelector('.s_speaker').value,
+                location: row.querySelector('.s_location').value
+            }));
+
+            const memorialRows = document.querySelectorAll('#adminMemorialsContainer > div');
+            appData.memorials = Array.from(memorialRows).map(row => ({
+                name: row.querySelector('.m_name').value,
+                date: row.querySelector('.m_date').value,
+                description: row.querySelector('.m_desc').value
+            }));
+
+            const tickerInput = document.getElementById('inputTicker');
+            if (tickerInput) appData.ticker = tickerInput.value;
+            
+            const noticeRows = document.querySelectorAll('#adminNoticesContainer > div:not(:first-child)');
+            appData.notices = Array.from(noticeRows).map(row => ({
+                title: row.querySelector('.n_title').value,
+                desc: row.querySelector('.n_desc').value
+            }));
+
+            const prevCity = appData.design ? appData.design.cityGeonameId : "281184";
+            const prevCustom = appData.design ? (appData.design.haftarahCustom || "sephardic") : "sephardic";
+            appData.design = {
+                themePreset: document.getElementById('settingThemePreset').value,
+                bgMain: document.getElementById('settingBgMain').value,
+                bgCardStart: document.getElementById('settingBgCardStart').value,
+                bgPanel: document.getElementById('settingBgPanel').value,
+                accent: document.getElementById('settingAccent').value,
+                textSub: document.getElementById('settingTextSub').value,
+                borderStyle: document.getElementById('settingBorderStyle').value,
+                fontScale: document.getElementById('settingFontScale').value,
+                tickerSpeed: document.getElementById('settingTickerSpeed').value,
+                logoIcon: document.getElementById('settingLogoIcon').value,
+                cityGeonameId: document.getElementById('settingCityGeo').value,
+                haftarahCustom: document.getElementById('settingHaftarahCustom').value,
+                showSeconds: document.getElementById('settingShowSeconds').checked,
+                showZmanim: document.getElementById('settingShowZmanim').checked,
+                highlightNextPrayer: document.getElementById('settingHighlightPrayer').checked
+            };
+
+            applyDesignSettings();
+
+            if (prevCity !== appData.design.cityGeonameId || prevCustom !== appData.design.haftarahCustom) {
+                const now = new Date();
+                calculateAccurateZmanim(now);
+                fetchShabbatDetails(now);
+            }
+
+            saveToPersistentStorage();
+            renderDisplay();
+            closeAdminModal();
+            showToast("העדכונים נשמרו בענן וסונכרנו לכל המחשבים והמסכים!");
+        }
+
+        function resetToDefaultData() {
+            const currentPass = appData.adminPassword || "beyt@1212";
+            appData = JSON.parse(JSON.stringify(defaultData));
+            appData.adminPassword = currentPass;
+            applyDesignSettings();
+            updateDynamicDatesAndZmanim();
+            saveToPersistentStorage();
+            renderDisplay();
+            closeAdminModal();
+            showToast("הלוח אופס לברירת המחדל בהצלחה.");
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toastNotification');
+            if (!toast) return;
+            const h5 = toast.querySelector('h5');
+            if (h5) h5.innerText = message;
+            toast.classList.remove('translate-y-32', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-32', 'opacity-0');
+            }, 4000);
+        }
+        
+        window.promptAdminAccess = promptAdminAccess;
+        window.closeLoginModal = closeLoginModal;
+        window.verifyAdminPassword = verifyAdminPassword;
+        window.togglePasswordVisibility = togglePasswordVisibility;
+        window.openAdminModal = openAdminModal;
+        window.closeAdminModal = closeAdminModal;
+        window.switchAdminTab = switchAdminTab;
+        window.onThemePresetChange = onThemePresetChange;
+        window.previewDesignLive = previewDesignLive;
+        window.updateAdminPasswordOnly = updateAdminPasswordOnly;
+        window.toggleFullScreenMode = toggleFullScreenMode;
+        window.applyDesignSettings = applyDesignSettings;
+        window.addPrayerRow = addPrayerRow;
+        window.addShiurRow = addShiurRow;
+        window.addMemorialRow = addMemorialRow;
+        window.addNoticeRow = addNoticeRow;
+        window.removeArrayItem = removeArrayItem;
+        window.saveAllChanges = saveAllChanges;
+        window.resetToDefaultData = resetToDefaultData;
+        window.showToast = showToast;
+        window.renderDisplay = renderDisplay;
+    </script>
+</head>
+<body class="min-h-screen flex flex-col justify-between bg-royalBlue-900 selection:bg-gold selection:text-royalBlue-900">
+
+    <!-- Header / Top Banner -->
+    <header class="gold-gradient-bg gold-border-sm border-t-0 border-l-0 border-r-0 py-4 px-6 relative z-10 shadow-2xl">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            
+            <!-- Synagogue Logo & Title -->
+            <div class="text-center md:text-right flex items-center gap-4">
+                <div class="w-16 h-16 rounded-full gold-border flex items-center justify-center bg-royalBlue-800 text-gold shadow-lg">
+                    <i id="headerLogoIcon" class="fa-solid fa-synagogue text-3xl"></i>
+                </div>
+                <div>
+                    <h1 id="headerMainTitle" class="text-3xl md:text-4xl font-black hebrew-title gold-text tracking-wide">בית הכנסת המרכזי</h1>
+                    <p id="headerSubTitle" class="text-gold-accent text-sm md:text-base font-semibold tracking-wider">לעילוי נשמת יוסף בן רחל ז"ל</p>
+                </div>
+            </div>
+
+            <!-- Central Clock & Hebrew Date -->
+            <div class="flex flex-col items-center bg-royalBlue-700/80 px-6 py-2 rounded-xl gold-border-sm shadow-inner">
+                <div id="digitalClock" class="text-3xl md:text-4xl font-bold font-mono gold-text tracking-widest">00:00:00</div>
+                <div id="hebrewDayOfWeek" class="text-gold text-base md:text-lg font-bold hebrew-title mt-1">יום רביעי</div>
+                <div id="hebrewDate" class="text-gold text-sm md:text-base font-semibold mt-0.5">ט' סיון תשפ"ו</div>
+                <div id="gregorianDate" class="text-gold-accent text-xs md:text-sm font-medium mt-0.5">3 ביוני 2026</div>
+            </div>
+
+            <!-- Management Access Button & Status -->
+            <div class="flex items-center gap-3">
+                <div class="hidden lg:flex flex-col text-left text-xs text-gold-accent">
+                    <span><i class="fa-solid fa-circle text-green-500 text-[10px] ml-1"></i> מסונכרן בזמן אמת</span>
+                    <span>מצב תצוגה: בית כנסת</span>
+                </div>
+                <button type="button" onclick="toggleFullScreenMode()" title="מסך מלא לתצוגת טלוויזיה" class="bg-royalBlue-700 hover:bg-royalBlue-800 text-gold px-3.5 py-2.5 rounded-lg shadow-lg transition-all border border-gold/40 cursor-pointer">
+                    <i class="fa-solid fa-expand"></i>
+                </button>
+                <button type="button" onclick="promptAdminAccess()" class="bg-gold hover:bg-gold-light text-royalBlue-900 font-bold px-5 py-2.5 rounded-lg shadow-lg transition-all transform hover:scale-105 flex items-center gap-2 border border-gold-dark cursor-pointer">
+                    <i class="fa-solid fa-lock"></i> פאנל משרד
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- Right/Start Column (4 cols on lg): Prayer Times & Halachic Times -->
+        <div class="lg:col-span-4 flex flex-col gap-6">
+            
+            <!-- Prayer Times Box -->
+            <div class="gold-gradient-bg gold-border custom-card-radius p-5 shadow-2xl relative overflow-hidden">
+                <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-gold to-transparent"></div>
+                <div class="flex items-center justify-between mb-4 pb-2 border-b border-gold/30">
+                    <h2 class="text-2xl font-bold hebrew-title gold-text flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-gold"></i> זמני תפילות
+                    </h2>
+                    <span id="prayerDateBadge" class="text-xs bg-gold/20 text-gold px-2.5 py-1 rounded-full border border-gold/40">היום</span>
+                </div>
+                
+                <div id="prayerTimesList" class="space-y-3">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+
+            <!-- Halachic Times / Zmanim Box -->
+            <div id="zmanimCardBox" class="gold-gradient-bg gold-border custom-card-radius p-5 shadow-2xl">
+                <h2 class="text-xl font-bold hebrew-title gold-text mb-3 pb-2 border-b border-gold/30 flex items-center gap-2">
+                    <i class="fa-solid fa-sun text-gold"></i> זמני היום (הלכה)
+                </h2>
+                <div id="zmanimList" class="grid grid-cols-2 gap-3 text-sm">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Left/End Column (8 cols on lg): Ticker, Shabbat Info, Bulletins, Shiurim & Dedications -->
+        <div class="lg:col-span-8 flex flex-col gap-6">
+
+            <!-- Scrolling Announcements Ticker Banner -->
+            <div class="bg-royalBlue-700 gold-border-sm custom-card-radius py-3 px-4 flex items-center shadow-lg overflow-hidden">
+                <div class="bg-gold text-royalBlue-900 font-bold px-3 py-1 rounded-lg text-xs md:text-sm ml-4 whitespace-nowrap shadow">
+                    <i class="fa-solid fa-bullhorn ml-1"></i> הודעות מערכת
+                </div>
+                <div class="ticker-wrap w-full">
+                    <div id="tickerContent" class="ticker text-gold-accent font-medium text-sm md:text-base">
+                        <!-- Dynamically filled -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shabbat Parasha, Haftarah & Times Card -->
+            <div class="gold-gradient-bg gold-border custom-card-radius p-5 shadow-2xl relative overflow-hidden">
+                <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-gold to-transparent"></div>
+                <div class="flex items-center justify-between mb-3 pb-2 border-b border-gold/30">
+                    <h2 class="text-xl font-bold hebrew-title gold-text flex items-center gap-2">
+                        <i class="fa-solid fa-scroll text-gold"></i> שבת קודש ופרשת השבוע
+                    </h2>
+                    <span id="displayHaftarahCustomBadge" class="text-xs bg-gold/20 text-gold px-2.5 py-0.5 rounded-full border border-gold/40 font-semibold">נוסח עדות המזרח</span>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                    <div class="md:col-span-7 text-center bg-royalBlue-700/70 p-3.5 rounded-xl border border-gold/30 shadow-inner">
+                        <div id="displayParashaName" class="text-2xl md:text-3xl font-black hebrew-title gold-text tracking-wide">פרשת השבוע</div>
+                        <div class="text-xs md:text-sm text-gold-accent mt-2 flex flex-col items-center justify-center gap-0.5 leading-snug">
+                            <span class="font-bold text-gold"><i class="fa-solid fa-book-bible ml-1"></i>הפטרה:</span>
+                            <span id="displayHaftarahName" class="font-semibold">מתעדכן...</span>
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-5 grid grid-cols-2 gap-3 h-full">
+                        <div class="bg-royalBlue-700/80 p-3 rounded-xl border border-gold/30 text-center flex flex-col items-center justify-center">
+                            <span class="text-xs text-gold-accent font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-fire-flame-curved text-gold"></i> כניסת שבת
+                            </span>
+                            <span id="displayCandleLighting" class="text-xl md:text-2xl font-bold font-mono text-gold mt-1 tracking-wider">--:--</span>
+                        </div>
+                        <div class="bg-royalBlue-700/80 p-3 rounded-xl border border-gold/30 text-center flex flex-col items-center justify-center">
+                            <span class="text-xs text-gold-accent font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-star text-gold"></i> יציאת שבת
+                            </span>
+                            <span id="displayHavdalah" class="text-xl md:text-2xl font-bold font-mono text-gold mt-1 tracking-wider">--:--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Notice Boards Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Torah Classes & Lectures -->
+                <div class="gold-gradient-bg gold-border custom-card-radius p-5 shadow-2xl flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4 pb-2 border-b border-gold/30">
+                            <h2 class="text-xl font-bold hebrew-title gold-text flex items-center gap-2">
+                                <i class="fa-solid fa-book-open text-gold"></i> שיעורי תורה וסדרים
+                            </h2>
+                            <i class="fa-solid fa-graduation-cap text-gold/60 text-lg"></i>
+                        </div>
+                        <div id="shiurimList" class="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memorials & Dedications -->
+                <div class="gold-gradient-bg gold-border custom-card-radius p-5 shadow-2xl flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4 pb-2 border-b border-gold/30">
+                            <h2 class="text-xl font-bold hebrew-title gold-text flex items-center gap-2">
+                                <i class="fa-solid fa-candle-holder text-gold"></i> לעילוי נשמות והקדשות
+                            </h2>
+                            <i class="fa-solid fa-heart text-gold/60 text-lg"></i>
+                        </div>
+                        <div id="memorialsList" class="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Bottom Notice Board (General Important Notices) -->
+            <div class="gold-gradient-bg gold-border custom-card-radius p-5 shadow-2xl">
+                <div class="flex items-center justify-between mb-3 pb-2 border-b border-gold/30">
+                    <h2 class="text-xl font-bold hebrew-title gold-text flex items-center gap-2">
+                        <i class="fa-solid fa-circle-exclamation text-gold"></i> לוח מודעות ועדכונים כלליים
+                    </h2>
+                    <span class="text-xs text-gold-accent font-medium">מתעדכן באופן שוטף</span>
+                </div>
+                <div id="generalNoticesList" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-royalBlue-700/90 border-t border-gold/30 py-3 px-6 text-center text-xs md:text-sm text-gold-accent mt-6">
+        <p>כל העדכונים מתבצעים ממרכז השליטה המשרדי ומסונכרנים באופן מיידי אל מסכי בית הכנסת.</p>
+    </footer>
+
+    <!-- Password Login Modal for Office Panel -->
+    <div id="loginModal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-royalBlue-800 gold-border rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
+            <button type="button" onclick="closeLoginModal()" class="absolute top-4 left-4 text-gold hover:text-white w-9 h-9 rounded-full bg-royalBlue-900/60 flex items-center justify-center border border-gold/30 cursor-pointer">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 rounded-full bg-gold/20 border-2 border-gold text-gold flex items-center justify-center mx-auto mb-3 shadow-lg">
+                    <i class="fa-solid fa-key text-2xl"></i>
+                </div>
+                <h3 class="text-2xl font-bold hebrew-title gold-text">כניסה לפאנל משרד</h3>
+                <p class="text-xs text-gold-accent mt-1">אזור זה מוגן בסיסמה לגבאים ומנהלי המערכת בלבד</p>
+            </div>
+            <form onsubmit="verifyAdminPassword(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gold-accent mb-1.5">הזן קוד גישה:</label>
+                    <div class="relative">
+                        <input type="password" id="adminPasswordInput" placeholder="הקלד קוד גישה..." dir="ltr" class="w-full bg-royalBlue-900 border border-gold/50 rounded-xl p-3 text-white text-center font-mono text-lg focus:outline-none focus:border-gold">
+                        <button type="button" onclick="togglePasswordVisibility('adminPasswordInput', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-gold/70 hover:text-gold cursor-pointer">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
+                    <p id="loginErrorMsg" class="text-red-400 text-xs font-bold mt-2 text-center hidden">
+                        <i class="fa-solid fa-circle-xmark ml-1"></i> קוד גישה שגוי! אנא נסה שנית.
+                    </p>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeLoginModal()" class="flex-1 py-2.5 rounded-xl bg-royalBlue-900 border border-gold/30 text-gold hover:bg-royalBlue-700 font-medium cursor-pointer">ביטול</button>
+                    <button type="submit" class="flex-1 py-2.5 rounded-xl bg-gold text-royalBlue-900 hover:bg-gold-light font-bold shadow-lg cursor-pointer">
+                        <i class="fa-solid fa-unlock ml-1"></i> כניסה למערכת
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Modal Panel -->
+    <div id="adminModal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-royalBlue-800 gold-border rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-fadeIn">
+            
+            <!-- Modal Header -->
+            <div class="gold-gradient-bg px-6 py-4 border-b border-gold/40 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center text-gold border border-gold">
+                        <i class="fa-solid fa-shield-halved text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold hebrew-title gold-text">פאנל ניהול משרדי</h3>
+                        <p class="text-xs text-gold-accent">ניהול ועדכון לוח המודעות הדיגיטלי בזמן אמת</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="switchAdminTab('settingsTab', document.getElementById('btnSettingsTab'))" class="bg-gold/20 hover:bg-gold/30 text-gold border border-gold/50 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-sliders"></i> הגדרות עיצוב ואבטחה
+                    </button>
+                    <button type="button" onclick="closeAdminModal()" class="text-gold hover:text-white text-2xl font-bold w-10 h-10 rounded-full bg-royalBlue-900/50 flex items-center justify-center border border-gold/30 transition-all cursor-pointer">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Tabs Navigation -->
+            <div class="flex border-b border-gold/30 bg-royalBlue-900/60 overflow-x-auto px-4 pt-2 gap-2">
+                <button type="button" onclick="switchAdminTab('generalTab', this)" id="btnGeneralTab" class="admin-tab px-4 py-2 font-semibold text-gold border-b-2 border-gold text-sm whitespace-nowrap cursor-pointer">כותרות ושבת</button>
+                <button type="button" onclick="switchAdminTab('prayersTab', this)" id="btnPrayersTab" class="admin-tab px-4 py-2 font-semibold text-gray-400 hover:text-gold text-sm whitespace-nowrap cursor-pointer">זמני תפילות</button>
+                <button type="button" onclick="switchAdminTab('shiurimTab', this)" id="btnShiurimTab" class="admin-tab px-4 py-2 font-semibold text-gray-400 hover:text-gold text-sm whitespace-nowrap cursor-pointer">שיעורי תורה</button>
+                <button type="button" onclick="switchAdminTab('memorialsTab', this)" id="btnMemorialsTab" class="admin-tab px-4 py-2 font-semibold text-gray-400 hover:text-gold text-sm whitespace-nowrap cursor-pointer">לעילוי נשמות</button>
+                <button type="button" onclick="switchAdminTab('noticesTab', this)" id="btnNoticesTab" class="admin-tab px-4 py-2 font-semibold text-gray-400 hover:text-gold text-sm whitespace-nowrap cursor-pointer">מודעות והודעות</button>
+                <button type="button" onclick="switchAdminTab('settingsTab', this)" id="btnSettingsTab" class="admin-tab px-4 py-2 font-semibold text-gray-400 hover:text-gold text-sm whitespace-nowrap cursor-pointer"><i class="fa-solid fa-gear ml-1"></i> הגדרות ועיצוב</button>
+            </div>
+
+            <!-- Modal Body (Tabs Content) -->
+            <div class="p-6 overflow-y-auto flex-1 space-y-6">
+                
+                <!-- Tab 1: General Titles & Shabbat Info -->
+                <div id="generalTab" class="admin-tab-content space-y-4">
+                    <h4 class="text-lg font-bold gold-text border-b border-gold/20 pb-2">הגדרת כותרות ראשית</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gold-accent mb-1">כותרת ראשית (שם בית הכנסת)</label>
+                            <input type="text" id="inputMainTitle" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2.5 text-white focus:outline-none focus:border-gold">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gold-accent mb-1">כותרת משנה / הקדשה ראשית</label>
+                            <input type="text" id="inputSubTitle" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2.5 text-white focus:outline-none focus:border-gold">
+                        </div>
+                    </div>
+
+                    <h4 class="text-lg font-bold gold-text border-b border-gold/20 pb-2 pt-4">פרשת השבוע, הפטרה (בעברית ובאותיות) וזמני שבת</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-royalBlue-900/60 p-4 rounded-xl border border-gold/30">
+                        <div>
+                            <label class="block text-xs font-medium text-gold-accent mb-1">שם פרשת השבוע:</label>
+                            <input type="text" id="inputParashaName" placeholder="לדוגמה: פרשת נח" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-gold">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gold-accent mb-1">הפטרה (בעברית ובאותיות):</label>
+                            <input type="text" id="inputHaftarahName" placeholder="לדוגמה: ישעיהו פרק נ&quot;ד פסוק א'" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-gold">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gold-accent mb-1">שעת כניסת שבת (הדלקת נרות):</label>
+                            <input type="text" id="inputCandleLighting" placeholder="19:30" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2 text-white text-sm font-mono focus:outline-none focus:border-gold">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gold-accent mb-1">שעת יציאת שבת (הבדלה):</label>
+                            <input type="text" id="inputHavdalah" placeholder="20:30" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2 text-white text-sm font-mono focus:outline-none focus:border-gold">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Prayer Times -->
+                <div id="prayersTab" class="admin-tab-content space-y-4 hidden">
+                    <div class="flex justify-between items-center border-b border-gold/20 pb-2">
+                        <h4 class="text-lg font-bold gold-text">ניהול זמני תפילות</h4>
+                        <button type="button" onclick="addPrayerRow()" class="bg-gold/20 hover:bg-gold/30 text-gold text-xs font-bold px-3 py-1.5 rounded border border-gold/50 flex items-center gap-1 cursor-pointer">
+                            <i class="fa-solid fa-plus"></i> הוסף תפילה
+                        </button>
+                    </div>
+                    <div id="adminPrayersContainer" class="space-y-3"></div>
+                </div>
+
+                <!-- Tab 3: Shiurim -->
+                <div id="shiurimTab" class="admin-tab-content space-y-4 hidden">
+                    <div class="flex justify-between items-center border-b border-gold/20 pb-2">
+                        <h4 class="text-lg font-bold gold-text">ניהול שיעורי תורה</h4>
+                        <button type="button" onclick="addShiurRow()" class="bg-gold/20 hover:bg-gold/30 text-gold text-xs font-bold px-3 py-1.5 rounded border border-gold/50 flex items-center gap-1 cursor-pointer">
+                            <i class="fa-solid fa-plus"></i> הוסף שיעור
+                        </button>
+                    </div>
+                    <div id="adminShiurimContainer" class="space-y-3"></div>
+                </div>
+
+                <!-- Tab 4: Memorials -->
+                <div id="memorialsTab" class="admin-tab-content space-y-4 hidden">
+                    <div class="flex justify-between items-center border-b border-gold/20 pb-2">
+                        <h4 class="text-lg font-bold gold-text">ניהול אזכרות והקדשות</h4>
+                        <button type="button" onclick="addMemorialRow()" class="bg-gold/20 hover:bg-gold/30 text-gold text-xs font-bold px-3 py-1.5 rounded border border-gold/50 flex items-center gap-1 cursor-pointer">
+                            <i class="fa-solid fa-plus"></i> הוסף הקדשה
+                        </button>
+                    </div>
+                    <div id="adminMemorialsContainer" class="space-y-3"></div>
+                </div>
+
+                <!-- Tab 5: Notices & Ticker -->
+                <div id="noticesTab" class="admin-tab-content space-y-4 hidden">
+                    <div class="flex justify-between items-center border-b border-gold/20 pb-2">
+                        <h4 class="text-lg font-bold gold-text">ניהול מודעות והודעות רצה</h4>
+                        <button type="button" onclick="addNoticeRow()" class="bg-gold/20 hover:bg-gold/30 text-gold text-xs font-bold px-3 py-1.5 rounded border border-gold/50 flex items-center gap-1 cursor-pointer">
+                            <i class="fa-solid fa-plus"></i> הוסף מודעה
+                        </button>
+                    </div>
+                    <div id="adminNoticesContainer" class="space-y-3"></div>
+                </div>
+
+                <!-- Tab 6: Advanced Settings, Theme & Password -->
+                <div id="settingsTab" class="admin-tab-content space-y-6 hidden">
+                    <div class="bg-royalBlue-900/70 p-4 rounded-2xl border border-gold/30 space-y-4">
+                        <h4 class="text-lg font-bold gold-text flex items-center gap-2 border-b border-gold/20 pb-2">
+                            <i class="fa-solid fa-palette"></i> עיצוב האתר וערכת צבעים
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gold-accent mb-1">בחר ערכת נושא מוכנה (תצוגה מקדימה מיידית):</label>
+                                <select id="settingThemePreset" onchange="onThemePresetChange(this.value)" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-gold">
+                                    <option value="royalGold">כחול מלכותי וזהב (קלאסי)</option>
+                                    <option value="jerusalemStone">אבן ירושלמית וברונזה</option>
+                                    <option value="emeraldSephardic">ירוק אזמרגד וזהב</option>
+                                    <option value="bordeauxVelvet">קטיפת בורדו וכסף-זהב</option>
+                                    <option value="parchmentLight">קלף בהיר ומסורתי (מצב יום)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gold-accent mb-1">סמל בית הכנסת בכותרת:</label>
+                                <select id="settingLogoIcon" onchange="previewDesignLive()" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-gold">
+                                    <option value="fa-synagogue">מבנה בית כנסת</option>
+                                    <option value="fa-star-of-david">מגן דוד</option>
+                                    <option value="fa-menorah">מנורת המקדש</option>
+                                    <option value="fa-torah">ספר תורה</option>
+                                    <option value="fa-scroll">מגילה / קלף</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
+                            <div class="bg-royalBlue-900 p-2.5 rounded-xl border border-gold/20 text-center">
+                                <label class="block text-[11px] text-gold-accent mb-1">רקע ראשי</label>
+                                <input type="color" id="settingBgMain" onchange="previewDesignLive()" class="w-full h-8 rounded cursor-pointer bg-transparent">
+                            </div>
+                            <div class="bg-royalBlue-900 p-2.5 rounded-xl border border-gold/20 text-center">
+                                <label class="block text-[11px] text-gold-accent mb-1">רקע כרטיסים</label>
+                                <input type="color" id="settingBgCardStart" onchange="previewDesignLive()" class="w-full h-8 rounded cursor-pointer bg-transparent">
+                            </div>
+                            <div class="bg-royalBlue-900 p-2.5 rounded-xl border border-gold/20 text-center">
+                                <label class="block text-[11px] text-gold-accent mb-1">רקע פנימי</label>
+                                <input type="color" id="settingBgPanel" onchange="previewDesignLive()" class="w-full h-8 rounded cursor-pointer bg-transparent">
+                            </div>
+                            <div class="bg-royalBlue-900 p-2.5 rounded-xl border border-gold/20 text-center">
+                                <label class="block text-[11px] text-gold-accent mb-1">צבע עיטור (זהב)</label>
+                                <input type="color" id="settingAccent" onchange="previewDesignLive()" class="w-full h-8 rounded cursor-pointer bg-transparent">
+                            </div>
+                            <div class="bg-royalBlue-900 p-2.5 rounded-xl border border-gold/20 text-center">
+                                <label class="block text-[11px] text-gold-accent mb-1">צבע טקסט משני</label>
+                                <input type="color" id="settingTextSub" onchange="previewDesignLive()" class="w-full h-8 rounded cursor-pointer bg-transparent">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-royalBlue-900/70 p-4 rounded-2xl border border-gold/30 space-y-4">
+                        <h4 class="text-lg font-bold gold-text flex items-center gap-2 border-b border-gold/20 pb-2">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> התאמת תצוגה ופיצ'רים שימושיים
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gold-accent mb-1">סגנון מסגרות:</label>
+                                <select id="settingBorderStyle" onchange="previewDesignLive()" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2 text-white text-sm">
+                                    <option value="rounded">פינות מעוגלות (מודרני)</option>
+                                    <option value="pill">עיגול מודגש</option>
+                                    <option value="sharp">קווים ישרים (קלאסי)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gold-accent mb-1">גודל גופן (למסכי טלוויזיה):</label>
+                                <select id="settingFontScale" onchange="previewDesignLive()" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2 text-white text-sm">
+                                    <option value="0.9">קטן (90%)</option>
+                                    <option value="1">רגיל (100%)</option>
+                                    <option value="1.12">גדול (112%)</option>
+                                    <option value="1.25">ענק למרחק (125%)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gold-accent mb-1">מהירות שורה רצה:</label>
+                                <select id="settingTickerSpeed" onchange="previewDesignLive()" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2 text-white text-sm">
+                                    <option value="50">איטי ורגוע</option>
+                                    <option value="35">רגיל</option>
+                                    <option value="20">מהיר</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gold-accent mb-1">עיר לחישוב זמנים:</label>
+                                <select id="settingCityGeo" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2 text-white text-sm">
+                                    <option value="281184">ירושלים</option>
+                                    <option value="293397">תל אביב - יפו</option>
+                                    <option value="295514">בני ברק</option>
+                                    <option value="294801">חיפה</option>
+                                    <option value="295530">באר שבע</option>
+                                    <option value="293100">צפת</option>
+                                    <option value="294946">אשדוד</option>
+                                    <option value="293918">פתח תקווה</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                            <div>
+                                <label class="block text-xs font-semibold text-gold-accent mb-1">מנהג הפטרה (ברירת מחדל: עדות המזרח):</label>
+                                <select id="settingHaftarahCustom" onchange="previewDesignLive()" class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2 text-white text-sm">
+                                    <option value="sephardic">עדות המזרח / ספרדים</option>
+                                    <option value="ashkenaz">אשכנזים</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                            <label class="flex items-center gap-2.5 bg-royalBlue-900 p-3 rounded-xl border border-gold/20 cursor-pointer">
+                                <input type="checkbox" id="settingHighlightPrayer" onchange="previewDesignLive()" class="w-4 h-4 accent-yellow-500">
+                                <span class="text-xs text-white font-medium">הדגש אוטומטית את התפילה הבאה</span>
+                            </label>
+                            <label class="flex items-center gap-2.5 bg-royalBlue-900 p-3 rounded-xl border border-gold/20 cursor-pointer">
+                                <input type="checkbox" id="settingShowSeconds" onchange="previewDesignLive()" class="w-4 h-4 accent-yellow-500">
+                                <span class="text-xs text-white font-medium">הצג שניות בשעון הדיגיטלי</span>
+                            </label>
+                            <label class="flex items-center gap-2.5 bg-royalBlue-900 p-3 rounded-xl border border-gold/20 cursor-pointer">
+                                <input type="checkbox" id="settingShowZmanim" onchange="previewDesignLive()" class="w-4 h-4 accent-yellow-500">
+                                <span class="text-xs text-white font-medium">הצג תיבת זמני היום (הלכה)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="bg-royalBlue-900/70 p-4 rounded-2xl border border-gold/30 space-y-3">
+                        <h4 class="text-lg font-bold gold-text flex items-center gap-2 border-b border-gold/20 pb-2">
+                            <i class="fa-solid fa-lock"></i> אבטחה ושינוי קוד גישה לפאנל משרד
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                            <div>
+                                <label class="block text-xs font-semibold text-gold-accent mb-1">קוד גישה חדש:</label>
+                                <input type="password" id="settingNewPassword" dir="ltr" placeholder="הזן קוד חדש..." class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2.5 text-white text-sm font-mono">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gold-accent mb-1">אימות קוד חדש:</label>
+                                <input type="password" id="settingConfirmPassword" dir="ltr" placeholder="הזן שוב לאימות..." class="w-full bg-royalBlue-900 border border-gold/40 rounded-lg p-2.5 text-white text-sm font-mono">
+                            </div>
+                            <div>
+                                <button type="button" onclick="updateAdminPasswordOnly()" class="w-full py-2.5 px-4 rounded-lg bg-gold/20 hover:bg-gold/30 text-gold border border-gold font-bold text-sm cursor-pointer">
+                                    <i class="fa-solid fa-key ml-1"></i> עדכן קוד כניסה
+                                </button>
+                            </div>
+                        </div>
+                        <p id="passwordChangeStatus" class="hidden"></p>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="gold-gradient-bg px-6 py-4 border-t border-gold/40 flex justify-between items-center">
+                <button type="button" onclick="resetToDefaultData()" class="text-red-400 hover:text-red-300 text-xs font-semibold flex items-center gap-1 cursor-pointer">
+                    <i class="fa-solid fa-rotate-right"></i> איפוס לברירת מחדל
+                </button>
+                <div class="flex gap-3">
+                    <button type="button" onclick="closeAdminModal()" class="px-5 py-2 rounded-lg bg-royalBlue-900 border border-gold/40 text-gold hover:bg-royalBlue-700 font-medium cursor-pointer">ביטול</button>
+                    <button type="button" onclick="saveAllChanges()" class="px-6 py-2 rounded-lg bg-gold text-royalBlue-900 hover:bg-gold-light font-bold shadow-lg border border-gold-dark flex items-center gap-2 cursor-pointer">
+                        <i class="fa-solid fa-floppy-disk"></i> שמור ועדכן מסכים
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast Modal -->
+    <div id="toastNotification" class="fixed bottom-6 left-6 bg-royalBlue-700 gold-border text-gold px-5 py-3 rounded-xl shadow-2xl transform translate-y-32 opacity-0 transition-all duration-300 z-50 flex items-center gap-3">
+        <i class="fa-solid fa-circle-check text-green-400 text-xl"></i>
+        <div>
+            <h5 class="font-bold">העדכונים נשמרו בהצלחה!</h5>
+            <p class="text-xs text-gold-accent">הנתונים סונכרנו לכל המסכים והמכשירים.</p>
+        </div>
+    </div>
+
+</body>
+</html>
